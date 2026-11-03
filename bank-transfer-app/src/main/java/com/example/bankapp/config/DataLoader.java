@@ -1,13 +1,13 @@
 package com.example.bankapp.config;
 
-//import com.example.bankapp.model.Customer;
-//import com.example.bankapp.repository.CustomerRepository;
+import com.example.bankapp.model.Customer;
+import com.example.bankapp.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-//import java.math.BigDecimal;
-//import java.util.List;
+import java.math.BigDecimal;
+import java.util.List;
 
 /** Inserts three sample customers the first time the application starts (empty database). */
 @Component

@@ -1,6 +1,6 @@
 package com.example.bankapp.model;
 
-/*import jakarta.persistence.Column;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;*/
+import java.time.LocalDateTime;
 
 
 public class BankTransaction {
