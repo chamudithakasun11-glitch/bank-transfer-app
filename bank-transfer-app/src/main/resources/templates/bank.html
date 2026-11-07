@@ -77,7 +77,7 @@
                     <select id="fromAccount" th:field="*{fromAccount}">
                         <option value="">-- Select sender --</option>
 
-                        <option th:each="c : ${allCustomers}"
+                        <option th:each="c : ${customers}"
                                 th:unless="${c.accountNumber == '999999'}"
                                 th:value="${c.accountNumber}"
                                 th:text="${c.fullName + ' (' +
@@ -98,7 +98,7 @@
                     <select id="toAccount" th:field="*{toAccount}">
                         <option value="">-- Select receiver --</option>
 
-                        <option th:each="c : ${allCustomers}"
+                        <option th:each="c : ${customers}"
                                 th:unless="${c.accountNumber == '999999'}"
                                 th:value="${c.accountNumber}"
                                 th:text="${c.fullName + ' (' +
@@ -294,11 +294,11 @@
                 </thead>
 
                 <tbody>
-                <tr th:if="${#lists.isEmpty(transactions)}">
+                <tr th:if="${#lists.isEmpty(latestTransactions)}">
                     <td colspan="7" class="empty">No transactions yet.</td>
                 </tr>
 
-                <tr th:each="t : ${transactions}">
+                <tr th:each="t : ${latestTransactions}">
                     <td th:text="${t.id}"></td>
 
                     <td th:text="${t.createdAt != null
