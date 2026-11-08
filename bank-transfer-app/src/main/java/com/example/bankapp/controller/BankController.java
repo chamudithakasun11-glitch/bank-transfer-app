@@ -1,17 +1,27 @@
 package com.example.bankapp.controller;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
 import com.example.bankapp.dto.TransferRequest;
+import com.example.bankapp.model.BankTransaction;
 import com.example.bankapp.model.Customer;
 import com.example.bankapp.model.TransactionStatus;
 import com.example.bankapp.service.BankService;
 import com.example.bankapp.service.TransactionAuditService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 @RequiredArgsConstructor
@@ -46,8 +56,8 @@ public class BankController {
      */
     @PostMapping("/customers")
     public String addCustomer(@Valid @ModelAttribute("newCustomer") Customer customer, 
-                            BindingResult bindingResult, 
-                            RedirectAttributes redirectAttributes) {
+                              BindingResult bindingResult, 
+                              RedirectAttributes redirectAttributes) {
                     
         // Check if bean validation failed (e.g., empty names or invalid amounts)
         if (bindingResult.hasErrors()) {
@@ -96,14 +106,77 @@ public class BankController {
 
     /**
      * Handles GET requests to view the transaction history of a specific account.
+     * Calculates total sent amount and fetches customer details for the view.
      */
     @GetMapping("/accounts/{accountNumber}/history")
-    public String accountHistory(@PathVariable String accountNumber, Model model) {
+    public String viewAccountHistory(@PathVariable("accountNumber") String accountNumber, Model model) {
         
-        // Fetch the transaction history for the specific account
-        model.addAttribute("transactions", bankService.getAccountHistory(accountNumber));
-        model.addAttribute("accountNumber", accountNumber);
+        // 1. Fetch customer details using the account number
+        Customer customer = bankService.getCustomer(accountNumber);
         
-        return "history"; // Renders history.html template
+        // 2. Fetch all transactions for this account (both sent and received)
+        List<BankTransaction> transactions = bankService.getAccountHistory(accountNumber);
+        
+        // 3. Calculate total successfully sent amount (including the 1% fee)
+        BigDecimal totalSent = BigDecimal.ZERO;
+        for (BankTransaction t : transactions) {
+            // Check if the current account is the sender and the transaction was successful
+            if (accountNumber.equals(t.getFromAccount()) && t.getStatus() == TransactionStatus.SUCCESS) {
+                totalSent = totalSent.add(t.getAmount());
+            }
+        }
+        
+        // 4. Add attributes to the model for Thymeleaf rendering in history.html
+        model.addAttribute("customer", customer);
+        model.addAttribute("transactions", transactions); // මෙතන transactions කියලා හැදුවා
+        model.addAttribute("totalSent", totalSent);
+        
+        return "history";
+    }
+
+    // ==========================================
+    // Deposit / Withdraw / Large Transfers Endpoints
+    // ==========================================
+
+    @GetMapping("/deposit")
+    public String showDepositForm(Model model) {
+        model.addAttribute("customers", bankService.searchCustomers(null));
+        return "deposit";
+    }
+
+    @PostMapping("/deposit")
+    public String processDeposit(@RequestParam String accountNumber, @RequestParam BigDecimal amount, RedirectAttributes redirectAttributes) {
+        try {
+            bankService.deposit(accountNumber, amount);
+            redirectAttributes.addFlashAttribute("success", "LKR " + amount + " deposited successfully.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/deposit";
+    }
+
+    @GetMapping("/withdraw")
+    public String showWithdrawForm(Model model) {
+        model.addAttribute("customers", bankService.searchCustomers(null));
+        return "withdraw";
+    }
+
+    @PostMapping("/withdraw")
+    public String processWithdraw(@RequestParam String accountNumber, @RequestParam BigDecimal amount, RedirectAttributes redirectAttributes) {
+        try {
+            bankService.withdraw(accountNumber, amount);
+            redirectAttributes.addFlashAttribute("success", "LKR " + amount + " withdrawn successfully.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/withdraw";
+    }
+
+    @GetMapping("/large-transfers")
+    public String showLargeTransfers(@RequestParam(name="min", defaultValue = "10000") BigDecimal min, Model model) {
+    
+        model.addAttribute("transfers", bankService.getLargeTransfers(min));
+        model.addAttribute("minAmount", min);
+        return "large-transfers";
     }
 }

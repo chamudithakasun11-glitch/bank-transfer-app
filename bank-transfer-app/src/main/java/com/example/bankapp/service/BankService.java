@@ -21,13 +21,16 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true) // default for every method: read-only transaction
+@Transactional(readOnly = true) // Default for every method: read-only transaction
 public class BankService {
 
     private final CustomerRepository customerRepository;
     private final BankTransactionRepository transactionRepository;
 
+    // ==========================================
     // View Methods for the Dashboard
+    // ==========================================
+    
     public List<Customer> searchCustomers(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return customerRepository.findAllOrdered();
@@ -47,9 +50,16 @@ public class BankService {
     public List<BankTransaction> getAccountHistory(String accountNumber) {
         return transactionRepository.findHistory(accountNumber);
     }
+    
+    public Customer getCustomer(String accountNumber) {
+        return customerRepository.getByAccountNumber(accountNumber)
+                .orElseThrow(() -> new AccountNotFoundException("Customer not found"));
+    }
 
-    
-    
+    // ==========================================
+    // Core Banking Operations (Write Methods)
+    // ==========================================
+
     @Transactional
     public void createCustomer(Customer customer) {
         if (customerRepository.countAccounts(customer.getAccountNumber()) > 0) {
@@ -61,11 +71,10 @@ public class BankService {
         customerRepository.save(customer);
     }
 
-    
     @Transactional(rollbackFor = Exception.class)
     public BankTransaction transfer(TransferRequest request) {
         
-        //Validate accounts
+        // Step 1: Validate accounts
         if (request.getFromAccount().equals(request.getToAccount())) {
             throw new BankException("Sender and receiver must be different accounts");
         }
@@ -118,5 +127,63 @@ public class BankService {
         transaction.setCreatedAt(LocalDateTime.now());
         
         return transactionRepository.save(transaction);
+    }
+
+    // ==========================================
+    // Deposit / Withdraw / Large Transfers
+    // ==========================================
+
+    @Transactional
+    public void deposit(String accountNumber, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BankException("Deposit amount must be greater than 0");
+        }
+        
+        // 1. Find the customer by account number
+        Customer customer = getCustomer(accountNumber);
+        
+        // 2. Credit the amount to the customer's balance
+        customerRepository.credit(accountNumber, amount);
+        
+        // 3. Save a transaction record for the deposit
+        BankTransaction transaction = new BankTransaction();
+        transaction.setToAccount(accountNumber); // No sender for a deposit, so FromAccount is left null
+        transaction.setAmount(amount);
+        transaction.setStatus(TransactionStatus.SUCCESS);
+        transaction.setDescription("Cash Deposit");
+        transaction.setCreatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+    }
+
+    @Transactional
+    public void withdraw(String accountNumber, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BankException("Withdrawal amount must be greater than 0");
+        }
+        
+        // 1. Find the customer by account number
+        Customer customer = getCustomer(accountNumber);
+        
+        // 2. Deduct the amount from the customer's balance
+        int debitCount = customerRepository.debit(accountNumber, amount);
+        if (debitCount == 0) {
+            throw new InsufficientBalanceException("Insufficient balance for withdrawal");
+        }
+        
+        // 3. Save a transaction record for the withdrawal
+        BankTransaction transaction = new BankTransaction();
+        transaction.setFromAccount(accountNumber); // No receiver for a withdrawal, so ToAccount is left null
+        transaction.setAmount(amount);
+        transaction.setStatus(TransactionStatus.SUCCESS);
+        transaction.setDescription("Cash Withdrawal");
+        transaction.setCreatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+    }
+
+    public List<BankTransaction> getLargeTransfers(BigDecimal minAmount) {
+        // Filter and return only the transactions that are greater than or equal to the minimum amount
+        return transactionRepository.findAllLatest().stream()
+                .filter(t -> t.getAmount() != null && t.getAmount().compareTo(minAmount) >= 0)
+                .toList();
     }
 }
