@@ -56,8 +56,8 @@ public class BankController {
      */
     @PostMapping("/customers")
     public String addCustomer(@Valid @ModelAttribute("newCustomer") Customer customer, 
-                              BindingResult bindingResult, 
-                              RedirectAttributes redirectAttributes) {
+                        BindingResult bindingResult, 
+                        RedirectAttributes redirectAttributes) {
                     
         // Check if bean validation failed (e.g., empty names or invalid amounts)
         if (bindingResult.hasErrors()) {

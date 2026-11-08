@@ -21,16 +21,13 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true) // Default for every method: read-only transaction
+@Transactional(readOnly = true) // default for every method: read-only transaction
 public class BankService {
 
     private final CustomerRepository customerRepository;
     private final BankTransactionRepository transactionRepository;
 
-    // ==========================================
     // View Methods for the Dashboard
-    // ==========================================
-    
     public List<Customer> searchCustomers(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return customerRepository.findAllOrdered();
@@ -56,10 +53,6 @@ public class BankService {
                 .orElseThrow(() -> new AccountNotFoundException("Customer not found"));
     }
 
-    // ==========================================
-    // Core Banking Operations (Write Methods)
-    // ==========================================
-
     @Transactional
     public void createCustomer(Customer customer) {
         if (customerRepository.countAccounts(customer.getAccountNumber()) > 0) {
@@ -74,7 +67,7 @@ public class BankService {
     @Transactional(rollbackFor = Exception.class)
     public BankTransaction transfer(TransferRequest request) {
         
-        // Step 1: Validate accounts
+        // Validate accounts
         if (request.getFromAccount().equals(request.getToAccount())) {
             throw new BankException("Sender and receiver must be different accounts");
         }
@@ -90,7 +83,7 @@ public class BankService {
         BigDecimal commission = transferAmount.multiply(new BigDecimal("0.01"));
         BigDecimal netAmountToReceiver = transferAmount.subtract(commission);
 
-        // Step 2: Debit the sender (UPDATE the sender's balance with the full amount)
+        // Debit the sender (UPDATE the sender's balance with the full amount)
         int debitCount = customerRepository.debit(sender.getAccountNumber(), transferAmount);
         if (debitCount == 0) {
             throw new InsufficientBalanceException("Insufficient balance in account " + sender.getAccountNumber());
@@ -106,18 +99,18 @@ public class BankService {
             return customerRepository.save(bankAccount);
         });
 
-        // Step 3: Simulate a crash if the checkbox is ticked
+        // Simulate a crash if the checkbox is ticked
         if (request.isSimulateFailure()) {
             throw new RuntimeException("Simulated system failure after the withdrawal");
         }
 
-        // Step 4: Credit the receiver (With the NET amount after commission)
+        // Credit the receiver (With the NET amount after commission)
         customerRepository.credit(receiver.getAccountNumber(), netAmountToReceiver);
 
         // Credit the bank's commission account with the commission amount
         customerRepository.credit("999999", commission);
 
-        // Step 5: Save a SUCCESS record
+        // Save a SUCCESS record
         BankTransaction transaction = new BankTransaction();
         transaction.setFromAccount(sender.getAccountNumber());
         transaction.setToAccount(receiver.getAccountNumber());
@@ -139,15 +132,16 @@ public class BankService {
             throw new BankException("Deposit amount must be greater than 0");
         }
         
-        // 1. Find the customer by account number
-        Customer customer = getCustomer(accountNumber);
+        // 1. Validate customer exists (removed assignment to fix unused variable warning)
+        getCustomer(accountNumber);
         
         // 2. Credit the amount to the customer's balance
         customerRepository.credit(accountNumber, amount);
         
         // 3. Save a transaction record for the deposit
         BankTransaction transaction = new BankTransaction();
-        transaction.setToAccount(accountNumber); // No sender for a deposit, so FromAccount is left null
+        transaction.setFromAccount("CASH"); // Fix for NOT NULL constraint
+        transaction.setToAccount(accountNumber);
         transaction.setAmount(amount);
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setDescription("Cash Deposit");
@@ -161,8 +155,8 @@ public class BankService {
             throw new BankException("Withdrawal amount must be greater than 0");
         }
         
-        // 1. Find the customer by account number
-        Customer customer = getCustomer(accountNumber);
+        // 1. Validate customer exists (removed assignment to fix unused variable warning)
+        getCustomer(accountNumber);
         
         // 2. Deduct the amount from the customer's balance
         int debitCount = customerRepository.debit(accountNumber, amount);
@@ -172,7 +166,8 @@ public class BankService {
         
         // 3. Save a transaction record for the withdrawal
         BankTransaction transaction = new BankTransaction();
-        transaction.setFromAccount(accountNumber); // No receiver for a withdrawal, so ToAccount is left null
+        transaction.setFromAccount(accountNumber); 
+        transaction.setToAccount("CASH"); // Fix for NOT NULL constraint
         transaction.setAmount(amount);
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setDescription("Cash Withdrawal");
@@ -181,7 +176,6 @@ public class BankService {
     }
 
     public List<BankTransaction> getLargeTransfers(BigDecimal minAmount) {
-        // Filter and return only the transactions that are greater than or equal to the minimum amount
         return transactionRepository.findAllLatest().stream()
                 .filter(t -> t.getAmount() != null && t.getAmount().compareTo(minAmount) >= 0)
                 .toList();
